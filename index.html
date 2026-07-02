@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="gl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>A Coruña — Bus Works · Coruña Labs</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<style>
+  :root{
+    --ink:#16181a;--muted:#6b7177;--faint:#9aa0a6;--hairline:#e2e3e5;
+    --paper:#fbfbfa;--panel:#ffffff;--rest:#b4b8bc;--tranvias-red:#a50813;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:"Inter","Helvetica Neue",Arial,system-ui,sans-serif;color:var(--ink);
+    background:var(--paper);-webkit-font-smoothing:antialiased;overflow:hidden}
+  #map{position:absolute;inset:0}
+
+  .masthead{position:absolute;top:0;left:0;z-index:5;padding:20px 22px 26px;max-width:380px;
+    background:linear-gradient(180deg,rgba(251,251,250,.94),rgba(251,251,250,0))}
+  .masthead .top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;pointer-events:none}
+  .lab{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;margin:0 0 7px;display:flex;align-items:center;gap:7px}
+  .lab a{color:inherit;text-decoration:none;pointer-events:auto}
+  .lab a:hover{color:var(--ink)}
+  .masthead h1{font-size:23px;line-height:1.12;margin:0;font-weight:660;letter-spacing:-.015em}
+  .masthead p.sub{font-size:12.5px;line-height:1.5;color:var(--muted);margin:9px 0 0;max-width:320px;pointer-events:none}
+  .masthead p.note{font-size:11.5px;color:var(--faint);margin:7px 0 0;font-style:italic}
+
+  .langs{pointer-events:auto;display:flex;gap:2px;flex:0 0 auto;margin-top:2px}
+  .langs button{background:none;border:none;font:inherit;font-size:11px;font-weight:600;
+    letter-spacing:.04em;color:var(--faint);cursor:pointer;padding:3px 6px;border-radius:5px;
+    text-transform:uppercase}
+  .langs button:hover{color:var(--muted);background:rgba(0,0,0,.04)}
+  .langs button.on{color:var(--ink);background:rgba(0,0,0,.06)}
+
+  .rail{position:absolute;z-index:5;right:14px;top:14px;bottom:14px;width:200px;background:var(--panel);
+    border:1px solid var(--hairline);border-radius:12px;
+    box-shadow:0 1px 2px rgba(0,0,0,.03),0 10px 30px rgba(0,0,0,.07);
+    display:flex;flex-direction:column;overflow:hidden}
+  .rail h2{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    margin:0;padding:14px 16px 11px;border-bottom:1px solid var(--hairline);font-weight:600;
+    display:flex;justify-content:space-between;align-items:baseline}
+  .rail h2 .clear{font-size:10px;letter-spacing:.02em;text-transform:none;color:var(--faint);
+    cursor:pointer;font-weight:500;visibility:hidden}
+  .rail h2 .clear.show{visibility:visible}
+  .rail h2 .clear:hover{color:var(--ink)}
+  .rail .scroll{overflow-y:auto;padding:7px}
+  .chip{display:flex;align-items:center;gap:10px;padding:6px 9px;border-radius:8px;cursor:pointer;
+    user-select:none;transition:background .12s}
+  .chip:hover{background:#f4f5f6}
+  .chip.active{background:#f0f1f2}
+  .badge{flex:0 0 auto;min-width:27px;height:22px;padding:0 6px;border-radius:6px;display:flex;
+    align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;
+    font-variant-numeric:tabular-nums;background:var(--rest);transition:background .12s}
+  .chip .dest{font-size:11.5px;color:var(--muted);line-height:1.25;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .chip.active .dest{color:var(--ink)}
+  .rail .foot{border-top:1px solid var(--hairline);padding:10px 16px;font-size:10px;
+    color:var(--faint);line-height:1.5}
+  .rail .foot a{color:var(--faint);text-decoration:underline;text-underline-offset:2px}
+
+  .maplibregl-popup-content{font-family:inherit;border-radius:9px;padding:11px 13px;
+    box-shadow:0 8px 28px rgba(0,0,0,.14);border:1px solid var(--hairline)}
+  .pop-title{font-size:13px;font-weight:660;margin:0 0 2px;display:flex;align-items:center;gap:7px}
+  .pop-swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .pop-sub{font-size:11px;color:var(--muted);margin:0}
+
+  .toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;
+    background:var(--panel);border:1px solid var(--hairline);border-radius:9px;padding:14px 18px;
+    font-size:13px;color:var(--muted);box-shadow:0 8px 24px rgba(0,0,0,.08)}
+  .toast.err{color:var(--tranvias-red)}
+
+  @media (max-width:640px){
+    .masthead{max-width:none;width:100%}
+    .rail{top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:42%}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="masthead">
+  <div class="top">
+    <div>
+      <p class="lab"><a href="https://corunalabs.org" target="_blank" rel="noopener">Coruña Labs</a></p>
+      <h1 id="m-title">Bus Works</h1>
+    </div>
+    <div class="langs" id="langs">
+      <button data-lang="gl">GL</button><button data-lang="es">ES</button><button data-lang="en">EN</button>
+    </div>
+  </div>
+  <p class="sub" id="m-sub"></p>
+  <p class="sub note" id="m-note"></p>
+</div>
+
+<div class="rail" aria-label="Bus lines">
+  <h2><span id="r-title">Liñas</span> <span class="clear" id="clear"></span></h2>
+  <div class="scroll" id="chips"></div>
+  <div class="foot" id="r-foot"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- i18n ---------- */
+const I18N = {
+  gl:{
+    title:"Bus Works",
+    sub:"Toda a rede de autobús urbano nun só mapa. Escolle unha liña para seguir o seu percorrido.",
+    note:"Estes autobuses son simulados, non reais — Tranvías aínda non ten un feed en tempo real.",
+    lines:"Liñas", clear:"Limpar",
+    loading:"Cargando a rede…",
+    error:"Non se puido cargar a rede. Comproba data/routes.geojson e data/stops.geojson.",
+    stop:"Parada", line:"Liña",
+    attribution:"Rede operada pola Compañía de Tranvías de La Coruña. Cores de liña e xeometría a partir dos seus datos abertos oficiais.", source:"Código fonte"
+  },
+  es:{
+    title:"Bus Works",
+    sub:"Toda la red de autobús urbano en un solo mapa. Elige una línea para seguir su recorrido.",
+    note:"Estos autobuses son simulados, no reales — Tranvías aún no tiene un feed en tiempo real.",
+    lines:"Líneas", clear:"Limpiar",
+    loading:"Cargando la red…",
+    error:"No se pudo cargar la red. Comprueba data/routes.geojson y data/stops.geojson.",
+    stop:"Parada", line:"Línea",
+    attribution:"Red operada por la Compañía de Tranvías de La Coruña. Colores de línea y geometría a partir de sus datos abiertos oficiales.", source:"Código fuente"
+  },
+  en:{
+    title:"Bus Works",
+    sub:"The whole city bus network on one map. Select a line to trace its path.",
+    note:"These buses are simulated, not live — Tranvías has no real-time feed yet.",
+    lines:"Lines", clear:"Clear",
+    loading:"Loading the network…",
+    error:"Couldn’t load the network. Check data/routes.geojson and data/stops.geojson.",
+    stop:"Stop", line:"Line",
+    attribution:"Network operated by Compañía de Tranvías de La Coruña. Line colors and geometry from their official open data.", source:"Source code"
+  }
+};
+const LANGS = ["gl","es","en"];
+
+/* ---------- URL + storage state ---------- */
+const params = new URLSearchParams(location.search);
+function initialLang(){
+  const u = params.get("lang");
+  if(u && LANGS.includes(u)) return u;
+  try{ const s = localStorage.getItem("busworks.lang"); if(s && LANGS.includes(s)) return s; }catch(e){}
+  return "gl";
+}
+let lang = initialLang();
+let selected = params.get("line") || null;   // validated after data loads
+
+function syncURL(){
+  const p = new URLSearchParams();
+  if(lang && lang!=="gl") p.set("lang",lang);   // gl is default, keep URL clean
+  if(selected) p.set("line",selected);
+  const qs = p.toString();
+  history.replaceState(null,"", qs ? `?${qs}` : location.pathname);
+}
+
+/* ---------- colors ---------- */
+const OFFICIAL = {
+  "1":"#a50813","2":"#dea21c","3":"#be8b00","4":"#42a888","5":"#6792bc","6":"#f96b09",
+  "7":"#019fa2","11":"#f94f8e","12":"#247724","14":"#3668a1","17":"#a15011","20":"#982135",
+  "21":"#355787","22":"#934165","23":"#7c508f","24":"#056e74","1A":"#e46078","2A":"#dcbb78",
+  "3A":"#d3b255","6A":"#fca86e","12A":"#7da27e","23A":"#9b83a5"
+};
+const FALLBACK = "#a50813";
+const colorFor = (n) => OFFICIAL[n] || FALLBACK;
+const REST = "#b4b8bc";
+const NONE = "___none___";
+const toast=document.getElementById("toast");
+const showToast=(m,e)=>{toast.style.display="block";toast.textContent=m;toast.classList.toggle("err",!!e)};
+const hideToast=()=>toast.style.display="none";
+
+
+/* ---------- apply language to the DOM (safe to run anytime) ---------- */
+function applyText(){
+  const t = I18N[lang];
+  document.documentElement.lang = lang;
+  document.getElementById("m-title").textContent = t.title;
+  document.getElementById("m-sub").textContent = t.sub;
+  document.getElementById("m-note").textContent = t.note;
+  document.getElementById("r-title").textContent = t.lines;
+  document.getElementById("clear").textContent = t.clear;
+  document.getElementById("r-foot").innerHTML =
+    t.attribution +
+    ' <a href="https://nap.transportes.gob.es/Files/Detail/1376" target="_blank" rel="noopener">GTFS</a>.' +
+    '<br><a href="https://github.com/coruna-labs/bus-works" target="_blank" rel="noopener">' + t.source + ' ↗</a>';
+  document.querySelectorAll(".langs button").forEach(b=>b.classList.toggle("on",b.dataset.lang===lang));
+  if(toast.style.display==="block" && !toast.classList.contains("err")) toast.textContent=t.loading;
+}
+
+function applyLang(){ applyText(); }
+
+/* apply the UI text immediately, before the map library even matters */
+applyText();
+showToast(I18N[lang].loading,false);
+
+const BASEMAP = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+const map = new maplibregl.Map({
+  container:"map", style:BASEMAP, center:[-8.406,43.370], zoom:12.4,
+  attributionControl:false, dragRotate:false, pitchWithRotate:false
+});
+map.touchZoomRotate.disableRotation();
+map.addControl(new maplibregl.NavigationControl({showCompass:false}),"bottom-right");
+
+document.getElementById("langs").addEventListener("click",(e)=>{
+  const b=e.target.closest("button"); if(!b) return;
+  lang=b.dataset.lang;
+  try{ localStorage.setItem("busworks.lang",lang); }catch(err){}
+  applyLang(); syncURL();
+});
+
+/* ---------- data + layers ---------- */
+map.on("load", async () => {
+  try{
+    const [routes,stops]=await Promise.all([
+      fetch("data/routes.geojson").then(r=>{if(!r.ok)throw new Error("routes");return r.json()}),
+      fetch("data/stops.geojson").then(r=>{if(!r.ok)throw new Error("stops");return r.json()})
+    ]);
+    routes.features.forEach(f=>{f.properties._color=colorFor(f.properties.route_short_name)});
+    // route_id -> short_name, so live buses (keyed by route_id) map to line names
+    routes.features.forEach(f=>{ idToLine[f.properties.route_id]=f.properties.route_short_name; });
+
+    // validate any ?line= against real lines
+    const validLines = new Set(routes.features.map(f=>f.properties.route_short_name));
+    if(selected && !validLines.has(selected)) selected=null;
+
+    map.addSource("routes",{type:"geojson",data:routes});
+    map.addSource("stops",{type:"geojson",data:stops});
+
+    map.addLayer({id:"routes-rest",type:"line",source:"routes",
+      layout:{"line-join":"round","line-cap":"round"},
+      paint:{"line-color":REST,
+        "line-width":["interpolate",["linear"],["zoom"],11,1.1,13,1.6,15,2.4],"line-opacity":0.75}});
+    map.addLayer({id:"routes-hover",type:"line",source:"routes",
+      layout:{"line-join":"round","line-cap":"round"},
+      filter:["==",["get","route_short_name"],NONE],
+      paint:{"line-color":"#7f858a",
+        "line-width":["interpolate",["linear"],["zoom"],11,2,15,3.4],"line-opacity":0.9}});
+    map.addLayer({id:"routes-sel-casing",type:"line",source:"routes",
+      layout:{"line-join":"round","line-cap":"round"},
+      filter:["==",["get","route_short_name"],NONE],
+      paint:{"line-color":"#2a2d30",
+        "line-width":["interpolate",["linear"],["zoom"],11,5,15,8.5],"line-opacity":0.28}});
+    map.addLayer({id:"routes-sel",type:"line",source:"routes",
+      layout:{"line-join":"round","line-cap":"round"},
+      filter:["==",["get","route_short_name"],NONE],
+      paint:{"line-color":["get","_color"],
+        "line-width":["interpolate",["linear"],["zoom"],11,2.8,15,5],"line-opacity":1}});
+    map.addLayer({id:"stops-dot",type:"circle",source:"stops",minzoom:13.2,
+      paint:{"circle-radius":["interpolate",["linear"],["zoom"],13,1.8,16,4],
+        "circle-color":"#ffffff","circle-stroke-color":"#9aa0a6",
+        "circle-stroke-width":1,"circle-opacity":0.85}});
+
+    // ---- live buses: empty source now, filled by the poll loop ----
+    map.addSource("buses",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
+    // resting: muted grey dots for every bus (doubled size)
+    map.addLayer({id:"buses-rest",type:"circle",source:"buses",
+      paint:{
+        "circle-radius":["interpolate",["linear"],["zoom"],11,5.2,15,8.4],
+        "circle-color":"#8a8f94",
+        "circle-stroke-color":"#ffffff","circle-stroke-width":1.6,
+        "circle-opacity":0.9
+      }});
+    // selected line's buses: larger, in the line's official color, on top
+    map.addLayer({id:"buses-sel",type:"circle",source:"buses",
+      filter:["==",["get","line"],NONE],
+      paint:{
+        "circle-radius":["interpolate",["linear"],["zoom"],11,12,15,19.5],
+        "circle-color":["get","_color"],
+        "circle-stroke-color":"#ffffff","circle-stroke-width":2,
+        "circle-opacity":1
+      }});
+    // resting line-number labels (for all buses)
+    map.addLayer({id:"buses-label",type:"symbol",source:"buses",
+      layout:{
+        "text-field":["get","line"],
+        "text-font":["Metropolis Bold","Noto Sans Bold"],
+        "text-size":["interpolate",["linear"],["zoom"],11,8,15,11],
+        "text-anchor":"center","text-justify":"center",
+        "text-offset":[0,0.12],
+        "text-allow-overlap":true,"text-ignore-placement":true
+      },
+      paint:{
+        "text-color":"#ffffff",
+        "text-halo-color":"rgba(0,0,0,0.35)","text-halo-width":0.8
+      }});
+    // selected line's labels: larger, filtered to the selected line, ADDED LAST
+    // so both the selected dots and their numbers always sit on top of everything
+    map.addLayer({id:"buses-sel-label",type:"symbol",source:"buses",
+      filter:["==",["get","line"],NONE],
+      layout:{
+        "text-field":["get","line"],
+        "text-font":["Metropolis Bold","Noto Sans Bold"],
+        "text-size":["interpolate",["linear"],["zoom"],11,13,15,17],
+        "text-anchor":"center","text-justify":"center",
+        "text-offset":[0,0.12],
+        "text-allow-overlap":true,"text-ignore-placement":true
+      },
+      paint:{
+        "text-color":"#ffffff",
+        "text-halo-color":"rgba(0,0,0,0.4)","text-halo-width":1
+      }});
+
+    buildRail(routes.features);
+    wireHover(); wireClicks();
+    constrainCamera(routes);          // maxBounds + minZoom from real extent
+    // capture each line's official color for the selected-bus layer
+    routes.features.forEach(f=>{ busColor[f.properties.route_short_name]=f.properties._color; });
+    if(selected) applySelection();    // restore ?line= selection
+    syncURL();
+    startBusLoop();                   // begin polling + gliding live positions
+    hideToast();
+  }catch(e){
+    showToast(I18N[lang].error,true);
+    console.error(e);
+  }
+});
+
+/* ---------- live buses: poll + glide ---------- */
+const BUS_REFRESH_MS = 3000;   // matches the simulator's --loop write rate (3s)
+// (for the local simulator with --loop, set this back to 3000 to match its 3s writes)
+let busPrev = {};               // line|idx -> {lon,lat} current rendered position
+let busNext = {};               // line|idx -> {lon,lat} target position
+let busColor = {};              // line -> official color (from routes)
+let idToLine = {};              // route_id -> short_name (live buses keyed by route_id)
+let glideStart = 0;
+
+function busKey(b,i){ return (b.route_id||b.line) + "|" + i; }
+
+async function pollBuses(){
+  try{
+    const res = await fetch("data/buses.json?t=" + Date.now()); // bust cache
+    if(!res.ok) return;
+    const data = await res.json();
+    const list = data.buses || [];
+    // move current "next" into "prev" (where dots are now), set new "next"
+    busPrev = {...busNext};
+    const seenNext = {};
+    list.forEach((b,i)=>{
+      const k = busKey(b,i);
+      // live Worker sends route_id; simulator sends line directly. Support both.
+      const lineName = b.line || idToLine[b.route_id] || b.route_id;
+      seenNext[k] = {lon:b.lon, lat:b.lat, line:lineName};
+      if(!busPrev[k]) busPrev[k] = {lon:b.lon, lat:b.lat, line:lineName}; // new bus: no glide
+    });
+    busNext = seenNext;
+    glideStart = performance.now();
+  }catch(e){ /* keep last known positions on a failed poll */ }
+}
+
+function renderBuses(now){
+  const dur = BUS_REFRESH_MS;
+  const t = glideStart===0 ? 1 : Math.min(1, Math.max(0,(now - glideStart)/dur));
+  const feats = [];
+  for(const k in busNext){
+    const nx = busNext[k];
+    const pv = busPrev[k] || nx;
+    const lon = pv.lon + (nx.lon - pv.lon) * t;   // linear interpolation = glide
+    const lat = pv.lat + (nx.lat - pv.lat) * t;
+    feats.push({
+      type:"Feature",
+      properties:{ line:nx.line, _color: busColor[nx.line] || FALLBACK },
+      geometry:{ type:"Point", coordinates:[lon,lat] }
+    });
+  }
+  const src = map.getSource("buses");
+  if(src) src.setData({type:"FeatureCollection",features:feats});
+  requestAnimationFrame(renderBuses);
+}
+
+function startBusLoop(){
+  pollBuses();                                   // first fetch
+  setInterval(pollBuses, BUS_REFRESH_MS);        // subsequent fetches
+  requestAnimationFrame(renderBuses);            // continuous glide
+}
+
+/* ---------- camera constraint ---------- */
+function extentOf(fc){
+  let a=180,b=90,c=-180,d=-90;
+  const w=(x)=>{if(typeof x[0]==="number"){a=Math.min(a,x[0]);c=Math.max(c,x[0]);b=Math.min(b,x[1]);d=Math.max(d,x[1])}else x.forEach(w)};
+  fc.features.forEach(f=>w(f.geometry.coordinates));
+  return [[a,b],[c,d]];
+}
+function constrainCamera(routes){
+  const [[minX,minY],[maxX,maxY]] = extentOf(routes);
+  const mx=(maxX-minX)*0.04, my=(maxY-minY)*0.04;   // small margin so edges don't clip
+  const bounds=[[minX-mx,minY-my],[maxX+mx,maxY+my]];
+  // frame the whole system once on load. No maxBounds / minZoom / maxZoom —
+  // the user pans and zooms with no constraints from here.
+  map.fitBounds(bounds,{padding:{top:80,left:50,right:230,bottom:50},duration:0});
+}
+
+/* ---------- rail ---------- */
+function buildRail(features){
+  const wrap=document.getElementById("chips");wrap.innerHTML="";
+  features.forEach(f=>{
+    const n=f.properties.route_short_name,dest=f.properties.route_long_name||"",col=f.properties._color;
+    const chip=document.createElement("div");
+    chip.className="chip";chip.dataset.line=n;chip.dataset.color=col;
+    chip.innerHTML=`<span class="badge">${n}</span><span class="dest">${dest}</span>`;
+    chip.addEventListener("click",()=>select(n));
+    chip.addEventListener("mouseenter",()=>hoverLine(n));
+    chip.addEventListener("mouseleave",()=>hoverLine(null));
+    wrap.appendChild(chip);
+  });
+  document.getElementById("clear").addEventListener("click",()=>select(null));
+}
+function hoverLine(n){
+  const val=(n&&n!==selected)?n:NONE;
+  map.setFilter("routes-hover",["==",["get","route_short_name"],val]);
+  document.querySelectorAll(".chip").forEach(c=>{
+    if(c.classList.contains("active"))return;
+    c.querySelector(".badge").style.background=(c.dataset.line===n)?c.dataset.color:REST;
+  });
+}
+function applySelection(){
+  const val=selected||NONE;
+  map.setFilter("routes-sel",["==",["get","route_short_name"],val]);
+  map.setFilter("routes-sel-casing",["==",["get","route_short_name"],val]);
+  map.setFilter("routes-hover",["==",["get","route_short_name"],NONE]);
+  // buses: selected line's dots brighten (own color, larger); others fade back
+  if(map.getLayer("buses-sel")) map.setFilter("buses-sel",["==",["get","line"],val]);
+  if(map.getLayer("buses-sel-label")) map.setFilter("buses-sel-label",["==",["get","line"],val]);
+  if(map.getLayer("buses-rest"))
+    map.setPaintProperty("buses-rest","circle-opacity", selected ? 0.35 : 0.9);
+  // dim resting labels when a line is selected, and hide them for the selected
+  // line so its bigger numbers (buses-sel-label) don't double-draw
+  if(map.getLayer("buses-label")){
+    map.setFilter("buses-label", selected ? ["!=",["get","line"],val] : null);
+    map.setPaintProperty("buses-label","text-opacity", selected ? 0.4 : 1);
+  }
+  document.querySelectorAll(".chip").forEach(c=>{
+    const on=c.dataset.line===selected;
+    c.classList.toggle("active",on);
+    c.querySelector(".badge").style.background=on?c.dataset.color:REST;
+  });
+  document.getElementById("clear").classList.toggle("show",!!selected);
+}
+function select(n){
+  selected=(selected===n)?null:n;
+  applySelection();
+  syncURL();
+}
+function wireHover(){
+  map.on("mousemove","routes-rest",(e)=>{
+    if(!e.features.length)return;
+    map.getCanvas().style.cursor="pointer";
+    const n=e.features[0].properties.route_short_name;
+    if(n!==selected)map.setFilter("routes-hover",["==",["get","route_short_name"],n]);
+  });
+  map.on("mouseleave","routes-rest",()=>{
+    map.getCanvas().style.cursor="";
+    map.setFilter("routes-hover",["==",["get","route_short_name"],NONE]);
+  });
+}
+function wireClicks(){
+  map.on("click","routes-rest",(e)=>{if(e.features.length)select(e.features[0].properties.route_short_name)});
+  map.on("click","routes-sel",(e)=>{
+    const p=e.features[0].properties;const t=I18N[lang];
+    popup.setLngLat(e.lngLat)
+      .setHTML(`<p class="pop-title"><span class="pop-swatch" style="background:${p._color}"></span>${t.line} ${p.route_short_name}</p><p class="pop-sub">${p.route_long_name||""}</p>`)
+      .addTo(map);
+  });
+  map.on("click","stops-dot",(e)=>{
+    const p=e.features[0].properties;const t=I18N[lang];
+    popup.setLngLat(e.lngLat)
+      .setHTML(`<p class="pop-title">${p.stop_name||t.stop}</p><p class="pop-sub">${t.stop} ${p.stop_code||p.stop_id||""}</p>`)
+      .addTo(map);
+  });
+  map.on("mouseenter","stops-dot",()=>map.getCanvas().style.cursor="pointer");
+  map.on("mouseleave","stops-dot",()=>map.getCanvas().style.cursor="");
+}
+const popup=new maplibregl.Popup({closeButton:false,closeOnClick:true,offset:12});
+</script>
+</body>
+</html>
