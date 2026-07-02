@@ -1,78 +1,92 @@
-# A Coruña Bus Network — Bus Works · Coruña Labs
+# Bus Works — A Coruña Bus Network
 
-One coherent, full-screen map of the entire city bus network, built on the
-operator's own open data. The whole network shows at rest in a quiet grey;
-selecting a line brings it forward in its official Tranvías color. Live vehicle
-positions are the next milestone.
+A single, full-screen live map of A Coruña's entire city bus network. The whole
+network rests in a quiet grey; select a line and it comes forward in the
+operator's own official color, its buses moving along their real routes.
 
-## Features
+A tool by **[Coruña Labs](https://corunalabs.org)** — an independent civic-tech
+lab building open, well-made tools on public data for A Coruña.
 
-- **Trilingual** — Galician (default), Spanish, English. Toggle in the masthead.
-  UI language persists across visits (localStorage) and is shareable via URL.
-  Feed-native place names are left untranslated (a stop is called what it's called).
-- **Shareable views** — language and selected line live in the URL
-  (`?lang=en&line=6A`), so any view can be bookmarked or sent to someone.
-  Galician is the clean default and is omitted from the URL.
-- **Grey at rest, official color on selection** — the network reads as one
-  legible whole; the selected line is the subject, painted in the operator's own
-  color with a dark casing so even pale colors stay legible.
-- **Bounded camera** — panning is fenced to the network's extent; you can't zoom
-  out past the resting frame or wander off to empty sea. Zoom-in stays free.
+**Live:** [busworks.corunalabs.org](https://busworks.corunalabs.org)
 
-## Run it locally
+[Bus Works](screengrab.gif)
 
-Static site, no build step. Serve the folder (browsers block `fetch` of files
-opened directly):
+## Inspiration
+
+Bus Works follows in the spirit of the **[MTA Live Subway Map](https://www.mta.info/map/5346)**,
+designed by **[Work & Co](https://work.co/news/mta-new-live-subway-map/)** with the
+MTA and the Transit Innovation Partnership — a web-based map that continually
+redraws the network and shows trains moving in real time, no app to download.
+Bus Works brings that same idea to A Coruña's buses: open it, see the network,
+watch the city move.
+
+## The data, and why the buses are simulated
+
+The static network — every route and stop — comes from the operator's official
+**GTFS** feed, published through Spain's national transport portal (NAP):
+[dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376), Compañía de
+Tranvías de La Coruña. 25 lines, 538 stops, real route geometry.
+
+The **moving buses are simulated.** A Coruña has no public real-time (GTFS-RT)
+feed yet, so this demo animates buses along their real routes to show what a
+live map looks like. The animation runs entirely in the browser — no server,
+no data feed — which is why the hosted site needs nothing running behind it.
+
+This is deliberate, and it's part of the point: **the city's network deserves a
+real-time feed.** A working demo makes that case better than a proposal. The
+code for a live version already exists in this repo (`worker.js`) and is ready
+to connect the day an official feed is published.
+
+## How it works
+
+Pure static site — HTML, CSS, one JavaScript file, and GeoJSON. No build step,
+no framework, no server.
+
+- **Basemap:** CARTO Positron (light grey, free, no API key).
+- **Map engine:** MapLibre GL (open-source, no billing).
+- **Routes & stops:** converted from GTFS to GeoJSON, drawn as vector layers.
+- **Buses:** simulated in-browser — each bus follows its line's real geometry,
+  advancing every animation frame at a realistic ~18 km/h. Selecting a line
+  brightens its buses to the official color; the rest stay muted.
+- **Trilingual:** Galician (default), Spanish, English. Language and selected
+  line are shareable via URL (`?lang=en&line=6A`) and remembered across visits.
+
+### Run locally
+
+Because the map loads GeoJSON with `fetch`, open it through a local server (not
+by double-clicking the file):
 
 ```bash
-cd coruna-bus-map
-node split.js ~/geojson/coruna/coruna.geojson   # once, to load real route data
-node simulate-buses.js                          # once, to seed data/buses.json
 python3 -m http.server 8000
+# then open http://localhost:8000
 ```
 
-Open <http://localhost:8000>.
+That's it — the buses animate on their own.
 
-### Watching buses move (simulated)
+### The files
 
-The map polls `data/buses.json` every 10s and glides dots between updates.
-To see them actually move against the placeholder, run the simulator in a
-second terminal so it rewrites the file continuously:
+- `index.html` — the whole app
+- `data/routes.geojson`, `data/stops.geojson` — the network
+- `official_colors.json` — the operator's line colors
+- `split.js` — splits a combined GTFS-to-GeoJSON export into routes + stops
+- `simulate-buses.js` — generates a static bus snapshot (not used by the live
+  demo, which simulates in-browser; kept for testing)
+- `worker.js` + `WORKER-DEPLOY.md` — the live-data path: a Cloudflare Worker
+  that proxies real iTranvías positions, for when a feed exists
 
-```bash
-node simulate-buses.js --loop     # rewrites data/buses.json every 3s
-```
+Built with Claude (Anthropic) as a coding tool — GTFS-to-GeoJSON conversion,
+the MapLibre layer and expression logic, the in-browser path simulation, and
+the reverse-engineered iTranvías proxy were drafted and iterated with it, under
+the author's direction. Worth noting plainly: the energy and cost of that
+assistance are real but hard to quantify — per-session figures aren't published,
+and estimates for tool-using AI work span a wide range.
 
-This is a stand-in for live data — it drives buses along the real route
-geometry so the dot layer and glide animation can be judged before the
-Cloudflare Worker exists. `buses.json` shape (the contract the Worker will
-match): `{ updated, buses: [{ line, lat, lon, status }] }`.
+## License
 
-- At rest: every bus is a small muted grey dot ("the whole city, moving").
-- Select a line: its buses brighten to the line's official color and grow;
-  the rest fade back.
+MIT.
 
-## Data
+## Data sources
 
-- `data/routes.geojson`, `data/stops.geojson` — split from the combined
-  `gtfs-to-geojson` output via `split.js`.
-- `official_colors.json` — line → hex, from Compañía de Tranvías de La Coruña.
-  These are mirrored inside `index.html` (the `OFFICIAL` map); lines without an
-  official color (UDC, BUH, future lines) fall back to the operator red.
-- Geometry source: <https://nap.transportes.gob.es/Files/Detail/1376> (official GTFS).
-
-## Files
-
-- `index.html` — the whole app (MapLibre GL via CDN)
-- `split.js` — splits combined GeoJSON into routes + stops
-- `simulate-buses.js` — generates placeholder `buses.json` (stand-in for live data)
-- `data/` — network GeoJSON + buses.json
-- `official_colors.json` — operator line colors
-- Basemap: CARTO Positron (light grey, free, no API key)
-
-## Next
-
-- The Cloudflare Worker: polls the iTranvías endpoint for all lines, bundles
-  positions into the `buses.json` shape, and serves it. Swapping the map from the
-  simulated file to the Worker is a one-line change to the fetch URL.
-- Empty / degraded states (feed down, no buses at night) — paired with the Worker.
+- GTFS network: [NAP dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376),
+  Compañía de Tranvías de La Coruña.
+- Line colors: Compañía de Tranvías de La Coruña.
