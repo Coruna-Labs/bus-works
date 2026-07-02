@@ -9,7 +9,7 @@ lab building open, well-made tools on public data for A Coruña.
 
 **Live:** [busworks.corunalabs.org](https://busworks.corunalabs.org)
 
-[Bus Works](screengrab.gif)
+![Bus Works](screengrab.gif)
 
 ## Inspiration
 
