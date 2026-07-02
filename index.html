@@ -221,8 +221,6 @@ map.on("load", async () => {
       fetch("data/stops.geojson").then(r=>{if(!r.ok)throw new Error("stops");return r.json()})
     ]);
     routes.features.forEach(f=>{f.properties._color=colorFor(f.properties.route_short_name)});
-    // route_id -> short_name, so live buses (keyed by route_id) map to line names
-    routes.features.forEach(f=>{ idToLine[f.properties.route_id]=f.properties.route_short_name; });
 
     // validate any ?line= against real lines
     const validLines = new Set(routes.features.map(f=>f.properties.route_short_name));
@@ -307,12 +305,13 @@ map.on("load", async () => {
 
     buildRail(routes.features);
     wireHover(); wireClicks();
-    constrainCamera(routes);          // maxBounds + minZoom from real extent
-    // capture each line's official color for the selected-bus layer
+    constrainCamera(routes);          // frame the whole system on load
+    // capture each line's official color, then build the in-browser demo buses
     routes.features.forEach(f=>{ busColor[f.properties.route_short_name]=f.properties._color; });
+    buildSimBuses(routes);
     if(selected) applySelection();    // restore ?line= selection
     syncURL();
-    startBusLoop();                   // begin polling + gliding live positions
+    startBusLoop();                   // continuous in-browser bus animation
     hideToast();
   }catch(e){
     showToast(I18N[lang].error,true);
@@ -320,62 +319,74 @@ map.on("load", async () => {
   }
 });
 
-/* ---------- live buses: poll + glide ---------- */
-const BUS_REFRESH_MS = 3000;   // matches the simulator's --loop write rate (3s)
-// (for the local simulator with --loop, set this back to 3000 to match its 3s writes)
-let busPrev = {};               // line|idx -> {lon,lat} current rendered position
-let busNext = {};               // line|idx -> {lon,lat} target position
+/* ---------- demo buses: simulated entirely in-browser ----------
+   No file, no server. Buses follow the real route geometry and advance every
+   frame, so the hosted static site shows continuous movement. The live-data
+   path (worker.js) stays documented for when an official feed exists. */
 let busColor = {};              // line -> official color (from routes)
-let idToLine = {};              // route_id -> short_name (live buses keyed by route_id)
-let glideStart = 0;
+let simBuses = [];              // { line, color, path (measured), t }
+const BUS_PER_LINE = 3;
+const SIM_SPEED = 0.00000074;   // path fraction per ms — tuned to ~18 km/h (realistic bus)
 
-function busKey(b,i){ return (b.route_id||b.line) + "|" + i; }
-
-async function pollBuses(){
-  try{
-    const res = await fetch("data/buses.json?t=" + Date.now()); // bust cache
-    if(!res.ok) return;
-    const data = await res.json();
-    const list = data.buses || [];
-    // move current "next" into "prev" (where dots are now), set new "next"
-    busPrev = {...busNext};
-    const seenNext = {};
-    list.forEach((b,i)=>{
-      const k = busKey(b,i);
-      // live Worker sends route_id; simulator sends line directly. Support both.
-      const lineName = b.line || idToLine[b.route_id] || b.route_id;
-      seenNext[k] = {lon:b.lon, lat:b.lat, line:lineName};
-      if(!busPrev[k]) busPrev[k] = {lon:b.lon, lat:b.lat, line:lineName}; // new bus: no glide
-    });
-    busNext = seenNext;
-    glideStart = performance.now();
-  }catch(e){ /* keep last known positions on a failed poll */ }
+// turn a route's coordinate path into a measured path (even speed along it)
+function measurePath(coords){
+  const segs=[]; let total=0;
+  for(let i=0;i<coords.length-1;i++){
+    const [x1,y1]=coords[i], [x2,y2]=coords[i+1];
+    const d=Math.hypot(x2-x1,y2-y1);
+    segs.push({x1,y1,x2,y2,d,acc:total}); total+=d;
+  }
+  return {segs,total};
+}
+function pointAt(m,t){
+  if(m.total===0) return [m.segs.length?m.segs[0].x1:0, m.segs.length?m.segs[0].y1:0];
+  const target=(t%1)*m.total;
+  for(const s of m.segs){
+    if(target<=s.acc+s.d){
+      const local=s.d===0?0:(target-s.acc)/s.d;
+      return [s.x1+(s.x2-s.x1)*local, s.y1+(s.y2-s.y1)*local];
+    }
+  }
+  const last=m.segs[m.segs.length-1];
+  return [last.x2,last.y2];
 }
 
+function buildSimBuses(routes){
+  simBuses=[];
+  routes.features.forEach(f=>{
+    const g=f.geometry;
+    const coords = g.type==="MultiLineString" ? g.coordinates[0] : g.coordinates;
+    if(!coords || coords.length<2) return;
+    const path=measurePath(coords);
+    const line=f.properties.route_short_name;
+    const color=f.properties._color;
+    for(let i=0;i<BUS_PER_LINE;i++){
+      simBuses.push({ line, color, path, t: i/BUS_PER_LINE });
+    }
+  });
+}
+
+let lastFrame=0;
 function renderBuses(now){
-  const dur = BUS_REFRESH_MS;
-  const t = glideStart===0 ? 1 : Math.min(1, Math.max(0,(now - glideStart)/dur));
-  const feats = [];
-  for(const k in busNext){
-    const nx = busNext[k];
-    const pv = busPrev[k] || nx;
-    const lon = pv.lon + (nx.lon - pv.lon) * t;   // linear interpolation = glide
-    const lat = pv.lat + (nx.lat - pv.lat) * t;
+  const dt = lastFrame ? (now-lastFrame) : 16;
+  lastFrame=now;
+  const feats=[];
+  for(const b of simBuses){
+    b.t=(b.t + SIM_SPEED*dt) % 1;      // advance along the path
+    const [lon,lat]=pointAt(b.path,b.t);
     feats.push({
       type:"Feature",
-      properties:{ line:nx.line, _color: busColor[nx.line] || FALLBACK },
+      properties:{ line:b.line, _color:b.color||FALLBACK },
       geometry:{ type:"Point", coordinates:[lon,lat] }
     });
   }
-  const src = map.getSource("buses");
+  const src=map.getSource("buses");
   if(src) src.setData({type:"FeatureCollection",features:feats});
   requestAnimationFrame(renderBuses);
 }
 
 function startBusLoop(){
-  pollBuses();                                   // first fetch
-  setInterval(pollBuses, BUS_REFRESH_MS);        // subsequent fetches
-  requestAnimationFrame(renderBuses);            // continuous glide
+  requestAnimationFrame(renderBuses);   // continuous in-browser animation
 }
 
 /* ---------- camera constraint ---------- */
