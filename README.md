@@ -4,14 +4,14 @@ A single, full-screen live map of A Coruña's entire local (Tranvías) bus netwo
 network rests in a quiet grey; select a line and it comes forward in the
 operator's own official color, its buses moving along their real routes.
 
-**Live:** [busworks.corunalabs.org](https://busworks.corunalabs.org)
+**Live:** [busworks.corunalabs.org](https://busworks.corunalabs.org){:target="_blank"}
 
 ![Bus Works](screengrab.gif)
 
 ## Inspiration
 
 Bus Works follows in the spirit of the **MTA Live Subway Map**,
-designed by **[Work & Co](https://work.co/news/mta-new-live-subway-map/)** with the
+designed by **[Work & Co](https://work.co/news/mta-new-live-subway-map/){:target="_blank"}** with the
 MTA and the Transit Innovation Partnership, a web-based map that continually
 redraws the network and shows trains moving in real time.
 Bus Works brings that same idea to A Coruña's buses. Open it, see the network,
@@ -21,7 +21,7 @@ watch the city move.
 
 The static network, every route and stop, comes from the operator's official
 **GTFS** feed, published through Spain's national transport portal (NAP):
-[dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376), Compañía de
+[dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376){:target="_blank"}, Compañía de
 Tranvías de La Coruña. 25 lines, 538 stops, real route geometry.
 
 The **moving buses are simulated.** Tranvías has no public real-time (GTFS-RT)
@@ -71,10 +71,10 @@ the author's direction.
 
 ## License
 
-[The MIT License (MIT)](https://mit-license.org)
+[The MIT License (MIT)](https://mit-license.org){:target="_blank"}
 
 ## Data sources
 
-- GTFS network: [NAP dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376),
+- GTFS network: [NAP dataset 1376](https://nap.transportes.gob.es/Files/Detail/1376){:target="_blank"},
   Compañía de Tranvías de La Coruña.
 - Line colors: Compañía de Tranvías de La Coruña.
