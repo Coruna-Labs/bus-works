@@ -85,7 +85,7 @@
 <div class="masthead">
   <div class="top">
     <div>
-      <p class="lab"><a href="https://corunalabs.org" target="_blank" rel="noopener">Coruña Labs</a></p>
+      <p class="lab"><a href="https://corunalabs.org">Coruña Labs</a></p>
       <h1 id="m-title">Bus Works</h1>
     </div>
     <div class="langs" id="langs">
@@ -204,7 +204,7 @@ const map = new maplibregl.Map({
   attributionControl:false, dragRotate:false, pitchWithRotate:false
 });
 map.touchZoomRotate.disableRotation();
-map.addControl(new maplibregl.NavigationControl({showCompass:false}),"bottom-right");
+map.addControl(new maplibregl.NavigationControl({showCompass:false}),"bottom-left");
 new ResizeObserver(() => map.resize()).observe(document.getElementById("map"));
 
 document.getElementById("langs").addEventListener("click",(e)=>{
