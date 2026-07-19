@@ -9,7 +9,7 @@
 <style>
   :root{
     --ink:#16181a;--muted:#6b7177;--faint:#9aa0a6;--hairline:#e2e3e5;
-    --paper:#fbfbfa;--panel:#ffffff;--rest:#b4b8bc;--tranvias-red:#a50813;
+    --paper:#fbfbfa;--panel:#ffffff;--rest:#b4b8bc;--error:#a50813;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -46,7 +46,7 @@
     cursor:pointer;font-weight:500;visibility:hidden}
   .rail h2 .clear.show{visibility:visible}
   .rail h2 .clear:hover{color:var(--ink)}
-  .rail .scroll{overflow-y:auto;padding:7px}
+  .rail .scroll{overflow-y:auto;padding:7px;flex:1}
   .chip{display:flex;align-items:center;gap:10px;padding:6px 9px;border-radius:8px;cursor:pointer;
     user-select:none;transition:background .12s}
   .chip:hover{background:#f4f5f6}
@@ -70,11 +70,12 @@
   .toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;
     background:var(--panel);border:1px solid var(--hairline);border-radius:9px;padding:14px 18px;
     font-size:13px;color:var(--muted);box-shadow:0 8px 24px rgba(0,0,0,.08)}
-  .toast.err{color:var(--tranvias-red)}
+  .toast.err{color:var(--error)}
 
   @media (max-width:640px){
     .masthead{max-width:none;width:100%}
     .rail{top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:42%}
+    .maplibregl-ctrl-bottom-left{display:none} /* zoom buttons: desktop only, rail covers this corner on mobile */
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -105,6 +106,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* ==========================================================================
+   Bus Works — Coruña Labs
+   The first tool, and the canonical reference for the shared map tool core
+   (masthead, language switcher, rail, toast — see map-template for the
+   extracted starting point for new tools).
+   ========================================================================== */
+
 /* ---------- i18n ---------- */
 const I18N = {
   gl:{
@@ -139,13 +147,14 @@ const I18N = {
   }
 };
 const LANGS = ["gl","es","en"];
+const STORAGE_KEY = "busworks.lang";
 
 /* ---------- URL + storage state ---------- */
 const params = new URLSearchParams(location.search);
 function initialLang(){
   const u = params.get("lang");
   if(u && LANGS.includes(u)) return u;
-  try{ const s = localStorage.getItem("busworks.lang"); if(s && LANGS.includes(s)) return s; }catch(e){}
+  try{ const s = localStorage.getItem(STORAGE_KEY); if(s && LANGS.includes(s)) return s; }catch(e){}
   return "gl";
 }
 let lang = initialLang();
@@ -187,7 +196,7 @@ function applyText(){
   document.getElementById("r-foot").innerHTML =
     t.attribution +
     ' <a href="https://nap.transportes.gob.es/Files/Detail/1376" target="_blank" rel="noopener">GTFS</a>.' +
-    '<br><a href="https://github.com/coruna-labs/bus-works" target="_blank" rel="noopener">' + t.source + ' ↗</a>';
+    '<br><a href="https://github.com/Coruna-Labs/bus-works" target="_blank" rel="noopener">' + t.source + ' ↗</a>';
   document.querySelectorAll(".langs button").forEach(b=>b.classList.toggle("on",b.dataset.lang===lang));
   if(toast.style.display==="block" && !toast.classList.contains("err")) toast.textContent=t.loading;
 }
@@ -210,7 +219,7 @@ new ResizeObserver(() => map.resize()).observe(document.getElementById("map"));
 document.getElementById("langs").addEventListener("click",(e)=>{
   const b=e.target.closest("button"); if(!b) return;
   lang=b.dataset.lang;
-  try{ localStorage.setItem("busworks.lang",lang); }catch(err){}
+  try{ localStorage.setItem(STORAGE_KEY,lang); }catch(err){}
   applyLang(); syncURL();
 });
 
